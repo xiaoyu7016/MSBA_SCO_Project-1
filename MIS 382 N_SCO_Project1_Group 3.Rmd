@@ -1,0 +1,193 @@
+---
+title: "MIS 381N SCO Project 1"
+author: "GROUP 3: Drew LIEBERMAN, Kartik SHARMA, Yuwen WANG, Vicky ZHANG"
+date: "February 8, 2016"
+output: html_document
+---
+
+```{r, echo=FALSE}
+setwd("C:/Users/Yuwen Wang/Desktop/SCO Project1")
+library(lpSolveAPI)
+```
+
+# Problem 1
+
+Let `x1`,`x2`,`x3`,`x4`,`x5`,`x6`,`x7`,`x8`,`x9`,`x10` represent the initial investment in each of the ten bonds. The objective is to minimize the initial cost and matching the liability cash flows for the coming 8 years.
+
+$min \ 102x_1 + 99x_2 + 101x_3 + 98x_4 + 98x_5 + 104x_6 + 100x_7 + 101x_8 + 102x_9 + 94x_{10}$
+
+$s.t.$
+
+$Year\ 1:\ (100+5)x_1 + 3.5x_2 + 5x_3 + 3.5x_4 + 4x_5 + 9x_6 + 6x_7 + 8x_8 + 9x_9 + 7x_{10}\ =\ 12,000$
+
+$Year\ 2:\ (100+3.5)x_2 + (100+5)x_3 + 3.5x_4 + 4x_5 + 9x_6 + 6x_7 + 8x_8 + 9x_9 + 7x_{10}\ =\ 18,000$
+
+$Year\ 3:\ (100+3.5)x_4 + 4x_5 + 9x_6 + 6x_7 + 8x_8 + 9x_9 + 7x_{10}\ =\ 20,000$
+
+$Year\ 4:\ (100+4)x_5 + 9x_6 + 6x_7 + 8x_8 + 9x_9 + 7x_{10}\ =\ 20,000$
+
+$Year\ 5:\ (100+9)x_6 + (100+6)x_7 + 8x_8 + 9x_9 + 7x_{10}\ =\ 16,000$
+
+$Year\ 6:\ (100+8)x_8 + 9x_9 + 7x_{10}\ =\ 15,000$
+
+$Year\ 7:\ (100+9)x_9 + 7x_{10}\ =\ 12,000$
+
+$Year\ 8:\ (100+7)x_{10}\ =\ 10,000$
+
+# Problem 2
+```{r}
+library(lpSolveAPI)
+
+my.lp <- make.lp(8,10) # 8 Constraints, 10 decision variables
+print (my.lp)
+
+Colnames=c('x1','x2','x3','x4','x5','x6','x7','x8','x9','x10')
+Rownames=c('Y1','Y2','Y3','Y4','Y5','Y6','Y7','Y8')
+dimnames(my.lp)<-list(Rownames,Colnames)
+
+add.constraint(my.lp,c(105,3.5,5,3.5,4,9,6,8,9,7), "=",12000)  #Y1
+add.constraint(my.lp,c(0,103.5,105,3.5,4,9,6,8,9,7), "=",18000) #Y2
+add.constraint(my.lp,c(0,0,0,103.5,4,9,6,8,9,7), "=",20000) #Y3
+add.constraint(my.lp,c(0,0,0,0,104,9,6,8,9,7), "=",20000) #Y4
+add.constraint(my.lp,c(0,0,0,0,0,109,106,8,9,7), "=",16000) #Y5
+add.constraint(my.lp,c(0,0,0,0,0,0,0,108,9,7), "=",15000) #Y6
+add.constraint(my.lp,c(0,0,0,0,0,0,0,0,109,7), "=",12000) #Y7
+add.constraint(my.lp,c(0,0,0,0,0,0,0,0,0,107), "=",10000) #Y8
+
+set.objfn(my.lp, c(102,99,101,98,98,104,100,101,102,94))
+lp.control(my.lp,sense='min')
+
+write.lp(my.lp,'Project1.lp',type='lp')
+solve(my.lp)
+print (get.objective(my.lp))
+print (get.variables(my.lp))
+
+```
+
+# Problem 3
+```{r,echo=FALSE}
+# Define the function
+dedicate_g3 <- function(P,C,M,L)
+{
+  Mat <- matrix(0,length(L),length(P))
+  for (j in 1:length(P))
+  {
+    Maturity = M[j]
+    if (Maturity > 1) {
+      #print(Maturity)
+      Mat[1:Maturity - 1,j] <- C[j]
+    }
+    Mat[Maturity,j] <- 100 + C[j]
+    if (sum(Maturity + 1) < nrow(Mat))
+    {
+      Mat[sum(Maturity + 1):nrow(Mat),j] = 0
+    }
+  }
+  Mat[1,length(P)] = -1
+  Mat[2,length(P)] = 1
+  for (Col in length(P):ncol(Mat))
+  {
+    for (Row in 2:nrow(Mat))
+    {
+      if (Mat[Row,sum(Col - 1)] == 1)
+      {
+        Mat[Row,Col] = -1
+      }
+      if (Mat[sum(Row - 1),Col] == -1)
+      {
+        Mat[Row,Col] = 1
+      }
+    }
+  }
+  
+  
+  Proj <- make.lp(length(L),ncol(Mat))
+  for (i in 1:ncol(Mat))
+  {
+    set.column(Proj,i,Mat[,i])
+  }
+  Price <- matrix(0,length(P))
+  for (i in 1:length(P))
+  {
+    Price[i] = P[i]
+  }
+  set.objfn(Proj,Price)
+  set.constr.type(Proj,rep("=",nrow(Mat)))
+  set.rhs(Proj,L)
+  lp.control(Proj,sense = 'min')
+  sol = solve(Proj)
+  dual = get.sensitivity.rhs(Proj)
+  #print(dual)
+  
+  returns = c(Proj, dual)
+  return (returns)
+  #Will return the whole thing so you can then type get.variables(object) and other actions like that
+  #return(get.variables(Proj))
+}
+```
+
+Testing of our function `dedicate_g3(P,C,M,L)`:
+
+```{r}
+P = c(102,99,101,98,98,104,100,101,102,94)
+C = c(5,3.5,5,3.5,4,9,6,8,9,7)
+M = c(1,2,2,3,4,5,5,6,7,8)
+L = c(12000,18000,20000,20000,16000,15000,12000,10000)
+
+Portfolio<-dedicate_g3(P,C,M,L)
+
+print (get.objective(Portfolio[[1]]))
+print (get.variables(Portfolio[[1]]))
+```
+
+# Problem 4
+
+Get US Treasury Bonds quotes from `http://www.wsj.com/mdc/public/page/2_3020-treasury.html` 
+
+\* **STARTING DATE**: pulled on **Feb 8, 2016**, which should be treated as the STARTING DATE.
+
+\* **MATURITY DATES**: chosen to match the date of liability stream. For some of the maturity dates there are multiple bonds available, we just randomly pick one bond for each maturity date.
+
+\* **PRICES**: calculated the average of bid and ask price ($price\ =\ (bid\ +\ ask)\ /\ 2$) as the price of a bond, which is a widely used approach in academics.
+
+```{r}
+raw_quotes = read.csv("US Treasury Bonds.csv")
+print (raw_quotes)
+
+P4 = (raw_quotes$Bid + raw_quotes$Asked) / 2
+C4 = raw_quotes$Coupon
+M4 = c(1,1,1,
+       2,2,2,
+       3,3,3,
+       4,4,4,
+       5,5,
+       6,6,
+       7,7,
+       8,8,
+       9,9,
+       10,10,
+       11,
+       12)
+L4 = c(9,9,10,10,6,6,9,9,10,10,5,3) * 1000000
+
+Portfolio_4<-dedicate_g3(P4,C4,M4,L4)
+
+print (get.objective(Portfolio_4[[1]]))
+print (get.variables(Portfolio_4[[1]]))
+
+```
+
+```{r,echo=FALSE}
+print (Portfolio_4$duals)
+plot(Portfolio_4$duals[1:12],
+     xlab = 'Maturity dates', xaxt = 'n',
+     ylab = 'Change in initial investment ($)',
+     pch = 19, cex = 1.5)
+axis(1, labels = unique(raw_quotes$Maturity), 
+     at = seq(from = 1, by = 1, length.out = length(L4)))
+title("Sensitivity of $1 Change in Liability")
+```
+
+The first 12 duals correspond to the 12 constraints we have, and the rest 26 correspond to the non-negative constraints. 
+
+The first 12 duals can be interpreted as follows: if liability in period i is reduced by $1, the intial investment in period 0 will reduce by $dual amount$. For example, for the first dual, if liability in year 1 reduces by $1, our initial payout would reduce by $0.97.  
